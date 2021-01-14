@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+
+@author: tang.mengyuan
+"""
+
+import poplib
+import email
+import datetime
+import time
+import os
+import xlrd
+import xlwt     
+import sys
+from email.parser import Parser
+from email.header import decode_header
+from email.utils import parseaddr
+
+def decode_str(s):
+    value, charset = decode_header(s)[0]
+    if charset:
+        value = value.decode(charset)
+    return value
+
+##下载邮件附件
+def GetmailAttachment(pop3_server,username,password,path,datestr,product):
+    pop_conn = poplib.POP3_SSL(pop3_server,995)
+    pop_conn.user(username)
+    pop_conn.pass_(password) 
+    # stat()返回邮件数量和占用空间:
+    print('Messages: %s. Size: %s' % pop_conn.stat())   
+    resp, mails, octets = pop_conn.list()
+    num = len(mails)  #邮件总数
+  # print(mails)
+    getfilesucess = 0
+   # attachment_files = [] 
+    
+    for i in range(num,20,-1):
+       # 最多遍历50条
+        resp, lines, octets = pop_conn.retr(i)
+        msg_content = b'\r\n'.join(lines).decode('utf-8')
+        msg = Parser().parsestr(msg_content)
+        
+        date1 = time.strptime(msg.get("Date")[0:24],'%a, %d %b %Y %H:%M:%S') #格式化收件时间
+        date2 = time.strftime("%Y%m%d", date1)
+        
+        subject_list = []
+        value = msg.get("Subject")
+        subject = decode_str(value)#邮件标题
+        subject_list.append(subject)
+        print('邮件标题%s:' % subject_list)
+        
+        for j in range(len(product)):
+            if (date2 > datestr) & (product[j] in subject):
+                for part in msg.walk():
+                    contenttype = part.get_content_type()
+                    file_name = part.get_filename()
+                    
+                    if file_name and contenttype == 'application/vnd.ms-excel':  #下载的是excel格式的附件
+                        h = email.header.Header(file_name) 
+                        dh = email.header.decode_header(h)#对附件名称进行解码 
+                        filename = dh[0][0] 
+                        if dh[0][1]: 
+                            filename = decode_str(str(filename,dh[0][1]))#将附件名称可读化 
+                            print(filename) 
+                
+                        data = part.get_payload(decode=True)  
+                        newpath = os.path.join(path,product[j])
+                        
+                      #  print(newpath)
+                        f = open(newpath +"/" + filename,'wb')    
+                        f.write(data)       
+                        f.close()     
+                        print ('文件下载成功')       
+                        getfilesucess = 1
+                #return attachment_files           
+    if getfilesucess == 0:
+        print ('未找到符合条件的邮件')
+     
+    pop_conn.quit()
+
+if __name__ == '__main__':
+    pop3_server = 'pop.qq.com'
+    username = '913***729@qq.com' 
+    password = 'flzf****xehbfcg' #需要第三方验证的邮箱要填pop3授权码
+    path = '/Users/laughter/Documents/email/'#文件夹地址
+    product=['科创2号','信聚鑫利1号','信聚鑫利2号']
+    datestr = '20210112'
+    
+    GetmailAttachment(pop3_server,username,password,path,datestr,product)
